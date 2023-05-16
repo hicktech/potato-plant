@@ -17,6 +17,7 @@ fn main() -> iced::Result {
         flags: Monitor {
             feet_planted: 19166.4,
             ground_speed_mph: 3.3,
+            auto_prime: [true, true],
             ..Monitor::default()
         },
         ..Settings::default()

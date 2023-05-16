@@ -50,9 +50,8 @@ impl Application for Dash {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         use Message::*;
         match message {
-            ToggleAutoPrime(id, v) => {
-                self.monitor.auto_prime[id] = v;
-            }
+            ToggleAutoPrime(id, v) => self.monitor.auto_prime[id] = v,
+            FillHopper(id) => self.monitor.priming[id] = !self.monitor.priming[id],
             _ => {}
         };
         Command::none()
