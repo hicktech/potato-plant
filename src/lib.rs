@@ -1,3 +1,10 @@
+pub mod app;
+mod gui;
+mod msg;
+mod row_ui;
+pub mod state;
+mod util;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }

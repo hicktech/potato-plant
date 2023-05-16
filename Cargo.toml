@@ -3,8 +3,12 @@ name = "potato-plant"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "popl"
+path = "src/lib.rs"
+
 [[bin]]
-name = "potato-monitor"
+name = "popl-dash"
 path = "src/main.rs"
 
 [dependencies]
