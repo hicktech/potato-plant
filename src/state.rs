@@ -14,4 +14,8 @@ impl Monitor {
     pub fn enable_seed_belt(&self, id: usize, en: bool) {
         self.io.tx.send(Cmd::SeedBeltControl(id, en));
     }
+
+    pub fn halt(&self) {
+        self.io.tx.send(Cmd::FlowHold);
+    }
 }

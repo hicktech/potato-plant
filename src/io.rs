@@ -1,3 +1,5 @@
+use adafruit_motorkit::dc::DcMotor;
+use adafruit_motorkit::{init_pwm, Motor};
 use crossbeam_channel::Sender;
 use embedded_hal::digital::OutputPin;
 use rppal::gpio::Gpio;
@@ -24,6 +26,8 @@ impl Default for IO {
 
 pub enum Cmd {
     SeedBeltControl(usize, bool),
+    FlowThrottle(f32),
+    FlowHold,
 }
 
 pub struct IO {
@@ -40,12 +44,21 @@ impl IO {
                 .into_output_low()
         });
 
+        let mut pwm = init_pwm(None)?;
+        let mut dc_motor = DcMotor::try_new(&mut pwm, Motor::Motor1)?;
+
         let (tx, rx) = crossbeam_channel::unbounded();
         thread::spawn(move || {
             for cmd in rx {
                 match cmd {
                     Cmd::SeedBeltControl(id, en) => {
                         belt[id].set_state(en.into());
+                    }
+                    Cmd::FlowThrottle(rate) => {
+                        dc_motor.set_throttle(&mut pwm, rate).unwrap();
+                    }
+                    Cmd::FlowHold => {
+                        dc_motor.stop(&mut pwm);
                     }
                 }
             }
@@ -61,6 +74,12 @@ impl IO {
                 match cmd {
                     Cmd::SeedBeltControl(id, en) => {
                         println!("Belt {id} {}", if en { "enabled" } else { "disabled" })
+                    }
+                    Cmd::FlowThrottle(rate) => {
+                        println!("Flow rate set to {rate}")
+                    }
+                    Cmd::FlowHold => {
+                        println!("Flow rate stopped")
                     }
                 }
             }

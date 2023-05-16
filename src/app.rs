@@ -56,6 +56,7 @@ impl Application for Dash {
                 self.monitor.priming[id] = !self.monitor.priming[id];
                 self.monitor.enable_seed_belt(id, self.monitor.priming[id]);
             }
+            Halt => self.monitor.halt(),
             _ => {}
         };
         Command::none()

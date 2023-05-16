@@ -57,6 +57,12 @@ fn footer(dash: &Dash) -> Container<Message> {
                 .height(FOOT_HEIGHT)
                 .width(FOOT_HEIGHT)
                 .on_press(Message::DecreaseSpacing),
+        )
+        .push(
+            Button::new("X")
+                .height(FOOT_HEIGHT)
+                .width(FOOT_HEIGHT)
+                .on_press(Message::Halt),
         );
     Container::new(row).width(Length::Fill)
 }
