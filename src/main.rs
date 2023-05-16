@@ -1,9 +1,15 @@
 use iced::window::Position;
 use iced::{window, Application, Settings};
 use popl::app::Dash;
+use popl::io::{IoCfg, IO};
 use popl::state::Monitor;
 
 fn main() -> iced::Result {
+    #[cfg(all(target_arch = "arm"))]
+    let io = IO::new(IoCfg::default());
+    #[cfg(all(target_arch = "x86_64"))]
+    let io = IO::fake(IoCfg::default()).expect("io init error");
+
     Dash::run(Settings {
         id: None,
         antialiasing: true,
@@ -18,7 +24,8 @@ fn main() -> iced::Result {
             feet_planted: 19166.4,
             ground_speed_mph: 3.3,
             auto_prime: [true, true],
-            ..Monitor::default()
+            priming: [false, false],
+            io,
         },
         ..Settings::default()
     })

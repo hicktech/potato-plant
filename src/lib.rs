@@ -1,5 +1,6 @@
 pub mod app;
 mod gui;
+pub mod io;
 mod msg;
 mod row_ui;
 pub mod state;

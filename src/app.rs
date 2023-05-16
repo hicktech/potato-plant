@@ -1,7 +1,8 @@
 use crate::gui::make_page;
 use crate::msg::Message;
 use crate::state::Monitor;
-use iced::{executor, Application, Command, Element, Renderer, Theme};
+use iced::{executor, Application, Command, Element, Renderer, Subscription, Theme};
+use rppal::gpio::Gpio;
 
 /// Potato planting dashboard
 pub struct Dash {
@@ -51,7 +52,10 @@ impl Application for Dash {
         use Message::*;
         match message {
             ToggleAutoPrime(id, v) => self.monitor.auto_prime[id] = v,
-            FillHopper(id) => self.monitor.priming[id] = !self.monitor.priming[id],
+            FillHopper(id) => {
+                self.monitor.priming[id] = !self.monitor.priming[id];
+                self.monitor.enable_seed_belt(id, self.monitor.priming[id]);
+            }
             _ => {}
         };
         Command::none()

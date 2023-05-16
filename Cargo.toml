@@ -15,4 +15,6 @@ path = "src/main.rs"
 iced = { version = "0.9", features = ["tokio", "glow"]}
 iced-gauges = "0.0.1"
 rppal = { version = "0.14.1", features = ["hal"] }
+embedded-hal = "1.0.0-alpha.9"
 adafruit_motorkit = "0.1.1"
+crossbeam-channel = "0.5"
