@@ -1,5 +1,6 @@
-use crate::io::{Cmd, IO};
+use crate::io::{Cmd, Event, IO};
 use embedded_hal::digital::OutputPin;
+use std::thread;
 
 #[derive(Default)]
 pub struct Monitor {
@@ -17,5 +18,20 @@ impl Monitor {
 
     pub fn halt(&self) {
         self.io.tx.send(Cmd::FlowHold);
+    }
+
+    pub fn watch(&self) {
+        thread::spawn({
+            let rx = self.io.rx.clone();
+            move || {
+                for e in rx {
+                    match e {
+                        Event::SeedWheelTick => {
+                            println!("seed wheel tick")
+                        }
+                    }
+                }
+            }
+        });
     }
 }

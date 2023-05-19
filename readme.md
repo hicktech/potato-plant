@@ -45,6 +45,7 @@ Inputs and outputs can be classified as being planter wide (one per planter) or 
 5. - [ ] GPS speed sensor
 6. - [ ] Hopper fill sensor
 7. - [ ] Seed sensor eye
+8. - [ ] Row context tracking based on planter raised sensor
 
 
 ## References

@@ -1,19 +1,21 @@
 use adafruit_motorkit::dc::DcMotor;
 use adafruit_motorkit::{init_pwm, Motor};
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use embedded_hal::digital::OutputPin;
-use rppal::gpio::Gpio;
+use rppal::gpio::{Gpio, Trigger};
 use std::error::Error;
 use std::thread;
 
 pub struct IoCfg {
     pub seed_belt_pins: [u8; 2],
+    pub seed_wheel_speed_pin: u8,
 }
 
 impl Default for IoCfg {
     fn default() -> Self {
         IoCfg {
             seed_belt_pins: [4, 5],
+            seed_wheel_speed_pin: 18,
         }
     }
 }
@@ -30,8 +32,13 @@ pub enum Cmd {
     FlowHold,
 }
 
+pub enum Event {
+    SeedWheelTick,
+}
+
 pub struct IO {
     pub tx: Sender<Cmd>,
+    pub rx: Receiver<Event>,
 }
 
 impl IO {
@@ -47,9 +54,18 @@ impl IO {
         let mut pwm = init_pwm(None)?;
         let mut dc_motor = DcMotor::try_new(&mut pwm, Motor::Motor1)?;
 
-        let (tx, rx) = crossbeam_channel::unbounded();
+        let (tx, crx) = crossbeam_channel::unbounded();
+        let (etx, rx) = crossbeam_channel::unbounded();
+
+        let mut speed = Gpio::new()?.get(cfg.seed_wheel_speed_pin)?.into_input();
+        speed
+            .set_async_interrupt(Trigger::RisingEdge, move |x| {
+                etx.send(Event::SeedWheelTick);
+            })
+            .expect("failed to add listener to seed wheel");
+
         thread::spawn(move || {
-            for cmd in rx {
+            for cmd in crx {
                 match cmd {
                     Cmd::SeedBeltControl(id, en) => {
                         belt[id].set_state(en.into());
@@ -64,13 +80,17 @@ impl IO {
             }
         });
 
-        Ok(IO { tx })
+        Ok(IO { tx, rx })
     }
 
     pub fn fake(cfg: IoCfg) -> Result<Self, Box<dyn Error>> {
-        let (tx, rx) = crossbeam_channel::unbounded();
+        let (tx, crx) = crossbeam_channel::unbounded();
+        let (etx, rx) = crossbeam_channel::unbounded();
+
+        // todo;; timer to simulate wheel speed
+
         thread::spawn(move || {
-            for cmd in rx {
+            for cmd in crx {
                 match cmd {
                     Cmd::SeedBeltControl(id, en) => {
                         println!("Belt {id} {}", if en { "enabled" } else { "disabled" })
@@ -85,6 +105,6 @@ impl IO {
             }
         });
 
-        Ok(IO { tx })
+        Ok(IO { tx, rx })
     }
 }
