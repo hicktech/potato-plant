@@ -1,6 +1,6 @@
 use crate::gui::make_page;
+use crate::monitor::Monitor;
 use crate::msg::Message;
-use crate::state::Monitor;
 use iced::{executor, Application, Command, Element, Renderer, Subscription, Theme};
 use rppal::gpio::Gpio;
 

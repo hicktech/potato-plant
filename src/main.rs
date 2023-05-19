@@ -2,7 +2,7 @@ use iced::window::Position;
 use iced::{window, Application, Settings};
 use popl::app::Dash;
 use popl::io::{IoCfg, IO};
-use popl::state::Monitor;
+use popl::monitor::Monitor;
 
 fn main() -> iced::Result {
     #[cfg(all(target_arch = "arm"))]

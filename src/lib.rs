@@ -1,9 +1,9 @@
 pub mod app;
 mod gui;
 pub mod io;
+pub mod monitor;
 mod msg;
 mod row_ui;
-pub mod state;
 mod util;
 
 pub fn add(left: usize, right: usize) -> usize {
