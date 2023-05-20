@@ -1,18 +1,28 @@
-use crate::app::Dash;
+use crate::app::{Dash, Page};
 use crate::msg::Message;
 use crate::row_ui::make_row;
 use crate::util::{fps_to_sps, mph_to_fps, row_feet_to_acres};
-use iced::widget::{Button, Column, Container, Row, Space, Text};
-use iced::Length;
+use iced::widget::{horizontal_space, Button, Column, Container, Row, Space, Text};
+use iced::{alignment, Alignment, Length, Renderer, Theme};
+use iced_aw::{TabBar, TabLabel};
 
 const SCREEN_WIDTH: u16 = 800;
 const SCREEN_HEIGHT: u16 = 480;
-const HEAD_HEIGHT: u16 = 40;
-const FOOT_HEIGHT: u16 = 80;
-pub const BODY_HEIGHT: u16 = SCREEN_HEIGHT - HEAD_HEIGHT - FOOT_HEIGHT;
+const HEAD_HEIGHT: u16 = 35;
+const FOOT_HEIGHT: u16 = 65;
+const TAB_HEIGHT: u16 = 25;
+pub const BODY_HEIGHT: u16 = SCREEN_HEIGHT - TAB_HEIGHT - HEAD_HEIGHT - FOOT_HEIGHT;
 
-pub fn make_page(dash: &Dash) -> Container<Message> {
+pub fn make_tabs(dash: &Dash) -> Container<Message> {
+    let mut tabs = TabBar::new(0, Message::TabSelected);
+    tabs = tabs.push(TabLabel::Text("monitor".to_string()));
+    tabs = tabs.push(TabLabel::Text("io".to_string()));
+    Container::new(tabs)
+}
+
+pub fn make_dash_page(dash: &Dash) -> Container<Message> {
     let body = Column::new()
+        .push(make_tabs(dash))
         .push(header(dash).height(HEAD_HEIGHT))
         .push(body(dash).height(BODY_HEIGHT))
         .push(footer(dash).height(FOOT_HEIGHT));
@@ -65,4 +75,12 @@ fn footer(dash: &Dash) -> Container<Message> {
                 .on_press(Message::Halt),
         );
     Container::new(row).width(Length::Fill)
+}
+
+pub fn make_io_page(dash: &Dash) -> Container<Message> {
+    let body = Column::new()
+        .push(make_tabs(dash))
+        .push(Text::new("SOFT IO"));
+
+    Container::new(body).width(Length::Fill)
 }

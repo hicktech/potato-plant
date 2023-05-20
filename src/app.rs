@@ -1,12 +1,18 @@
-use crate::gui::make_page;
+use crate::gui::{make_dash_page, make_io_page};
 use crate::monitor::Monitor;
 use crate::msg::Message;
 use iced::{executor, Application, Command, Element, Renderer, Subscription, Theme};
 use rppal::gpio::Gpio;
 
+pub enum Page {
+    Dashboard,
+    SoftIO,
+}
+
 /// Potato planting dashboard
 pub struct Dash {
     monitor: Monitor,
+    pub page: Page,
     pub in_between_seed: f32,
 }
 
@@ -38,6 +44,7 @@ impl Application for Dash {
         (
             Dash {
                 monitor: flags,
+                page: Page::Dashboard,
                 in_between_seed: 10.0,
             },
             Command::none(),
@@ -57,12 +64,17 @@ impl Application for Dash {
                 self.monitor.enable_seed_belt(id, self.monitor.priming[id]);
             }
             Halt => self.monitor.halt(),
+            TabSelected(i) if i == 0 => self.page = Page::Dashboard,
+            TabSelected(i) if i == 1 => self.page = Page::SoftIO,
             _ => {}
         };
         Command::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message, Renderer<Self::Theme>> {
-        make_page(self).into()
+        match self.page {
+            Page::Dashboard => make_dash_page(self).into(),
+            Page::SoftIO => make_io_page(self).into(),
+        }
     }
 }

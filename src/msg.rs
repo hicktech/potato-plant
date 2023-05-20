@@ -5,4 +5,5 @@ pub enum Message {
     DecreaseSpacing,
     ToggleAutoPrime(usize, bool),
     FillHopper(usize),
+    TabSelected(usize),
 }
