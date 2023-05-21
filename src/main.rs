@@ -25,6 +25,7 @@ fn main() -> iced::Result {
             ground_speed_mph: 3.3,
             auto_prime: [true, true],
             priming: [false, false],
+            planter_raised: false,
             io,
         },
         ..Settings::default()

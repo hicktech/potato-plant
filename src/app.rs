@@ -1,8 +1,9 @@
+use iced::{executor, subscription, Application, Command, Element, Renderer, Subscription, Theme};
+use std::time::Duration;
+
 use crate::gui::{make_dash_page, make_io_page};
 use crate::monitor::Monitor;
 use crate::msg::Message;
-use iced::{executor, Application, Command, Element, Renderer, Subscription, Theme};
-use rppal::gpio::Gpio;
 
 pub enum Page {
     Dashboard,
@@ -17,6 +18,10 @@ pub struct Dash {
 }
 
 impl Dash {
+    pub fn planter_raised(&self) -> bool {
+        self.monitor.planter_raised
+    }
+
     pub fn auto_prime_on(&self, id: usize) -> bool {
         self.monitor.auto_prime[id]
     }
@@ -66,6 +71,8 @@ impl Application for Dash {
             Halt => self.monitor.halt(),
             TabSelected(i) if i == 0 => self.page = Page::Dashboard,
             TabSelected(i) if i == 1 => self.page = Page::SoftIO,
+            SimulateCmd(cmd) => self.monitor.io.tx.send(cmd).unwrap(),
+            IOEvent(e) => self.monitor.handle_event(e),
             _ => {}
         };
         Command::none()
@@ -76,5 +83,15 @@ impl Application for Dash {
             Page::Dashboard => make_dash_page(self).into(),
             Page::SoftIO => make_io_page(self).into(),
         }
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        let rx = self.monitor.io.rx.clone();
+        subscription::unfold("foo", (rx), move |(rx)| async {
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(e) => (Message::IOEvent(e), (rx)),
+                _ => (Message::Halt, (rx)),
+            }
+        })
     }
 }

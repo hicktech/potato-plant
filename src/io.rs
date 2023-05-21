@@ -1,3 +1,4 @@
+use crate::io::Event::{PlanterLowered, PlanterRaised};
 use adafruit_motorkit::dc::DcMotor;
 use adafruit_motorkit::{init_pwm, Motor};
 use crossbeam_channel::{Receiver, Sender};
@@ -6,9 +7,19 @@ use rppal::gpio::{Gpio, Trigger};
 use std::error::Error;
 use std::thread;
 
+#[derive(Default)]
+pub enum LiftSensor {
+    #[default]
+    Software,
+    Hardware {
+        pin: u8,
+    },
+}
+
 pub struct IoCfg {
     pub seed_belt_pins: [u8; 2],
     pub seed_wheel_speed_pin: u8,
+    pub lift_sensor: LiftSensor,
 }
 
 impl Default for IoCfg {
@@ -16,6 +27,7 @@ impl Default for IoCfg {
         IoCfg {
             seed_belt_pins: [4, 5],
             seed_wheel_speed_pin: 18,
+            lift_sensor: Default::default(),
         }
     }
 }
@@ -26,14 +38,21 @@ impl Default for IO {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Cmd {
     SeedBeltControl(usize, bool),
     FlowThrottle(f32),
     FlowHold,
+    RaisePlanter,
+    LowerPlanter,
 }
 
+#[derive(Debug, Clone)]
 pub enum Event {
     SeedWheelTick,
+    PlanterRaised,
+    PlanterLowered,
+    GroundSpeed(f32),
 }
 
 pub struct IO {
@@ -76,6 +95,7 @@ impl IO {
                     Cmd::FlowHold => {
                         dc_motor.stop(&mut pwm);
                     }
+                    _ => {}
                 }
             }
         });
@@ -100,6 +120,14 @@ impl IO {
                     }
                     Cmd::FlowHold => {
                         println!("Flow rate stopped")
+                    }
+                    Cmd::RaisePlanter => {
+                        etx.send(PlanterRaised);
+                        println!("Raise planter")
+                    }
+                    Cmd::LowerPlanter => {
+                        etx.send(PlanterLowered);
+                        println!("Lower planter")
                     }
                 }
             }

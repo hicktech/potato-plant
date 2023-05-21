@@ -8,6 +8,7 @@ pub struct Monitor {
     pub feet_planted: f32,
     pub auto_prime: [bool; 2],
     pub priming: [bool; 2],
+    pub planter_raised: bool,
     pub io: IO,
 }
 
@@ -20,18 +21,12 @@ impl Monitor {
         self.io.tx.send(Cmd::FlowHold);
     }
 
-    pub fn watch(&self) {
-        thread::spawn({
-            let rx = self.io.rx.clone();
-            move || {
-                for e in rx {
-                    match e {
-                        Event::SeedWheelTick => {
-                            println!("seed wheel tick")
-                        }
-                    }
-                }
-            }
-        });
+    pub fn handle_event(&mut self, e: Event) {
+        match e {
+            Event::SeedWheelTick => {}
+            Event::PlanterRaised => self.planter_raised = true,
+            Event::PlanterLowered => self.planter_raised = false,
+            Event::GroundSpeed(v) => self.ground_speed_mph = v,
+        }
     }
 }
