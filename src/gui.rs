@@ -1,10 +1,10 @@
 use crate::app::{Dash, Page};
 use crate::io::Cmd::{LowerPlanter, RaisePlanter, SeedBeltControl};
-use crate::io::Event::{GroundSpeed, PlanterLowered, PlanterRaised};
+use crate::io::Event::{GroundSpeed, PlanterLowered, PlanterRaised, SeedWheelSpeed};
 use crate::msg::Message;
 use crate::msg::Message::{IOEvent, SimulateCmd};
 use crate::row_ui::make_row;
-use crate::util::{fps_to_sps, mph_to_fps, row_feet_to_acres};
+use crate::util::{fps_to_sps, mph_to_fps, row_feet_to_acres, rpm_to_seed_per_second};
 use iced::widget::{
     horizontal_space, row, slider, Button, Column, Container, Row, Slider, Space, Text, Toggler,
 };
@@ -48,7 +48,8 @@ fn header(dash: &Dash) -> Container<Message> {
     let acres = row_feet_to_acres(rowft);
     let mph = dash.ground_speed_mph();
     let fps = mph_to_fps(mph);
-    let sps = fps_to_sps(fps, dash.in_between_seed);
+    let target_sps = fps_to_sps(fps, dash.in_between_seed);
+    let actual_sps = rpm_to_seed_per_second(dash.seed_wheel_speed_rpm());
 
     let row = Row::new()
         .push(Text::new(format!("Acres: {acres:<.2} | Rows: {rowft}'")))
@@ -60,7 +61,7 @@ fn header(dash: &Dash) -> Container<Message> {
         })
         .push(Space::new(Length::Fill, Length::Fill))
         .push(Text::new(format!(
-            "{mph:<.1} MPH  |  {fps:<.1} FPS  |  {sps:<.1} SPS"
+            "{mph:<.1} MPH  |  {fps:<.1} FPS  |  {target_sps:<.1} SPS | {actual_sps}"
         )));
     Container::new(row).width(Length::Fill)
 }
@@ -113,7 +114,14 @@ pub fn make_io_page(dash: &Dash) -> Container<Message> {
             "Hopper 2 fill switch:".to_string(),
             dash.priming(1),
             move |b| SimulateCmd(SeedBeltControl(1, b)),
-        ));
+        ))
+        .push(row![
+            Text::new("Seed wheel speed"),
+            slider(0.0..=50.0, dash.seed_wheel_speed_rpm(), |v| {
+                IOEvent(SeedWheelSpeed(v))
+            })
+            .step(0.1)
+        ]);
 
     Container::new(body).width(Length::Fill)
 }

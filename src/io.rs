@@ -53,6 +53,7 @@ pub enum Event {
     PlanterRaised,
     PlanterLowered,
     GroundSpeed(f32),
+    SeedWheelSpeed(f32),
     HopperEmpty(usize),
     HopperFull(usize),
 }

@@ -25,3 +25,7 @@ pub fn ticks_per_pick() -> usize {
 pub fn seed_per_ticks(ticks: usize) -> usize {
     ticks / ticks_per_pick()
 }
+
+pub fn rpm_to_seed_per_second(rpm: f32) -> f32 {
+    rpm * 60.0 / PICKS_ON_WHEEL as f32
+}

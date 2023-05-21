@@ -23,6 +23,7 @@ fn main() -> iced::Result {
         flags: Monitor {
             feet_planted: 19166.4,
             ground_speed_mph: 3.3,
+            seed_wheel_speed_rpm: 100.0,
             auto_prime: [true, true],
             priming: [false, false],
             planter_raised: false,

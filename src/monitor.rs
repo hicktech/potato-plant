@@ -7,6 +7,7 @@ pub struct Monitor {
     pub io: IO,
 
     pub ground_speed_mph: f32,
+    pub seed_wheel_speed_rpm: f32,
     pub planter_raised: bool,
     pub auto_prime: [bool; 2],
     pub priming: [bool; 2],
@@ -28,9 +29,10 @@ impl Monitor {
             Event::SeedWheelTick => {}
             Event::PlanterRaised => self.planter_raised = true,
             Event::PlanterLowered => self.planter_raised = false,
-            Event::GroundSpeed(v) => self.ground_speed_mph = v,
+            Event::GroundSpeed(mph) => self.ground_speed_mph = mph,
             Event::HopperEmpty(n) => self.priming[n] = true,
             Event::HopperFull(n) => self.priming[n] = false,
+            Event::SeedWheelSpeed(rpm) => self.seed_wheel_speed_rpm = rpm,
         }
     }
 }

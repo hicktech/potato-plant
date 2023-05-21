@@ -37,6 +37,10 @@ impl Dash {
     pub fn ground_speed_mph(&self) -> f32 {
         self.monitor.ground_speed_mph
     }
+
+    pub fn seed_wheel_speed_rpm(&self) -> f32 {
+        self.monitor.seed_wheel_speed_rpm
+    }
 }
 
 impl Application for Dash {
