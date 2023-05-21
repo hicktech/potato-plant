@@ -1,4 +1,4 @@
-use crate::io::Event::{PlanterLowered, PlanterRaised};
+use crate::io::Event::{HopperEmpty, HopperFull, PlanterLowered, PlanterRaised};
 use adafruit_motorkit::dc::DcMotor;
 use adafruit_motorkit::{init_pwm, Motor};
 use crossbeam_channel::{Receiver, Sender};
@@ -53,6 +53,8 @@ pub enum Event {
     PlanterRaised,
     PlanterLowered,
     GroundSpeed(f32),
+    HopperEmpty(usize),
+    HopperFull(usize),
 }
 
 pub struct IO {
@@ -113,7 +115,8 @@ impl IO {
             for cmd in crx {
                 match cmd {
                     Cmd::SeedBeltControl(id, en) => {
-                        println!("Belt {id} {}", if en { "enabled" } else { "disabled" })
+                        println!("Belt {id} {}", if en { "enabled" } else { "disabled" });
+                        etx.send(if en { HopperEmpty(id) } else { HopperFull(id) });
                     }
                     Cmd::FlowThrottle(rate) => {
                         println!("Flow rate set to {rate}")

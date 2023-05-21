@@ -4,12 +4,14 @@ use std::thread;
 
 #[derive(Default)]
 pub struct Monitor {
+    pub io: IO,
+
     pub ground_speed_mph: f32,
-    pub feet_planted: f32,
+    pub planter_raised: bool,
     pub auto_prime: [bool; 2],
     pub priming: [bool; 2],
-    pub planter_raised: bool,
-    pub io: IO,
+
+    pub feet_planted: f32,
 }
 
 impl Monitor {
@@ -27,6 +29,8 @@ impl Monitor {
             Event::PlanterRaised => self.planter_raised = true,
             Event::PlanterLowered => self.planter_raised = false,
             Event::GroundSpeed(v) => self.ground_speed_mph = v,
+            Event::HopperEmpty(n) => self.priming[n] = true,
+            Event::HopperFull(n) => self.priming[n] = false,
         }
     }
 }

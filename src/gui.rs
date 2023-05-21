@@ -1,5 +1,5 @@
 use crate::app::{Dash, Page};
-use crate::io::Cmd::{LowerPlanter, RaisePlanter};
+use crate::io::Cmd::{LowerPlanter, RaisePlanter, SeedBeltControl};
 use crate::io::Event::{GroundSpeed, PlanterLowered, PlanterRaised};
 use crate::msg::Message;
 use crate::msg::Message::{IOEvent, SimulateCmd};
@@ -103,7 +103,17 @@ pub fn make_io_page(dash: &Dash) -> Container<Message> {
                 IOEvent(GroundSpeed(v))
             })
             .step(0.1)
-        ]);
+        ])
+        .push(Toggler::new(
+            "Hopper 1 fill switch:".to_string(),
+            dash.priming(0),
+            move |b| SimulateCmd(SeedBeltControl(0, b)),
+        ))
+        .push(Toggler::new(
+            "Hopper 2 fill switch:".to_string(),
+            dash.priming(1),
+            move |b| SimulateCmd(SeedBeltControl(1, b)),
+        ));
 
     Container::new(body).width(Length::Fill)
 }

@@ -71,8 +71,8 @@ impl Application for Dash {
             Halt => self.monitor.halt(),
             TabSelected(i) if i == 0 => self.page = Page::Dashboard,
             TabSelected(i) if i == 1 => self.page = Page::SoftIO,
-            SimulateCmd(cmd) => self.monitor.io.tx.send(cmd).unwrap(),
             IOEvent(e) => self.monitor.handle_event(e),
+            SimulateCmd(cmd) => self.monitor.io.tx.send(cmd).unwrap(),
             _ => {}
         };
         Command::none()
