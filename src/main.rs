@@ -6,8 +6,8 @@ use popl::monitor::Monitor;
 
 fn main() -> iced::Result {
     #[cfg(all(target_arch = "arm"))]
-    let io = IO::new(IoCfg::default());
-    #[cfg(all(target_arch = "x86_64"))]
+    let io = IO::new(IoCfg::default()).expect("io init error");
+    //#[cfg(all(target_arch = "x86_64"))]
     let io = IO::fake(IoCfg::default()).expect("io init error");
 
     Dash::run(Settings {
