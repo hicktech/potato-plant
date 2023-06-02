@@ -4,7 +4,7 @@ pub mod io;
 pub mod monitor;
 mod msg;
 mod row_ui;
-mod util;
+pub mod util;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

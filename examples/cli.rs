@@ -22,6 +22,11 @@ enum HopperState {
     Full,
 }
 
+enum PlanterLiftState {
+    Raised,
+    Lowered,
+}
+
 #[derive(Debug)]
 enum Message {
     GroundSpeed(f32),
@@ -32,13 +37,23 @@ enum Message {
     PlanterLowered,
 }
 
-const CLOCK_PIN: u8 = 4;
-const DATA_PIN: u8 = 5;
-const HOPPER_LIMIT_0: u8 = 6;
-const HOPPER_LIMIT_1: u8 = 7;
-const HOPPER_RELAY_0: u8 = 8;
-const HOPPER_RELAY_1: u8 = 9;
-const PLANTER_LIFT_PIN: u8 = 10;
+// #4
+const CLOCK_PIN: u8 = 26;
+// #5
+const DATA_PIN: u8 = 27;
+
+// #6
+const HOPPER_LIMIT_0: u8 = 24;
+// #7
+const HOPPER_LIMIT_1: u8 = 25;
+
+// #8
+const HOPPER_RELAY_0: u8 = 5;
+// #9
+const HOPPER_RELAY_1: u8 = 6;
+
+// #10
+const PLANTER_LIFT_PIN: u8 = 4;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -46,20 +61,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // main messaging channel; analogous to the iced update function or subscription channel
     let (msg_tx, mut msg_rx) = mpsc::channel(5);
-    println!("a");
 
     // flow control
     let mut pwm = init_pwm(None)?;
     let mut dc_motor = DcMotor::try_new(&mut pwm, Motor::Motor1)?;
 
-    println!("b");
     // hopper specific channels, these are aggregated into main message channel
     let (hopper0_tx, mut hopper0_rx) = mpsc::channel(1);
     let (hopper1_tx, mut hopper1_rx) = mpsc::channel(1);
 
     // limit switch per hopper
-    let mut limit_pin_hopper0 = Gpio::new()?.get(HOPPER_LIMIT_0)?.into_input();
-    let mut limit_pin_hopper1 = Gpio::new()?.get(HOPPER_LIMIT_1)?.into_input();
+    let mut limit_pin_hopper0 = Gpio::new()?.get(HOPPER_LIMIT_0)?.into_input_pulldown();
+    let mut limit_pin_hopper1 = Gpio::new()?.get(HOPPER_LIMIT_1)?.into_input_pulldown();
 
     limit_pin_hopper0.set_async_interrupt(Trigger::Both, move |l| {
         match l {
@@ -86,8 +99,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input();
     limit_planter_lift.set_async_interrupt(Trigger::Both, move |l| {
         match l {
-            Level::Low => planter_lift_tx.blocking_send(Message::PlanterLowered),
-            Level::High => planter_lift_tx.blocking_send(Message::PlanterRaised),
+            Level::Low => planter_lift_tx.blocking_send(PlanterLiftState::Lowered),
+            Level::High => planter_lift_tx.blocking_send(PlanterLiftState::Raised),
         };
     })?;
 
@@ -121,6 +134,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 },
                 Some(e) = tick_rx.recv() => {tps += 1;},
+                Some(lift_state) = planter_lift_rx.recv() => {
+                    match lift_state {
+                        PlanterLiftState::Raised => { msg_tx.send(Message::PlanterRaised).await; }
+                        PlanterLiftState::Lowered => { msg_tx.send(Message::PlanterLowered).await; }
+                    }
+                },
                 _ = interval.tick() => {
                     msg_tx.send(Message::TickRate(tps as f32)).await;
                     tps = 0;
@@ -150,8 +169,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 
                     GroundSpeed(speed) => ground_speed = speed,
-                    HopperFull(i) => hopper_relay_pins[i].write(Level::Low),
-                    HopperEmpty(i) => hopper_relay_pins[i].write(Level::High),
+                    HopperFull(i) => hopper_relay_pins[i].write(Level::High),
+                    HopperEmpty(i) => hopper_relay_pins[i].write(Level::Low),
                     TickRate(tps) => {
                         // automatically adjust the flow control
                         // todo;; perhaps automatic is not the best way to begin
