@@ -48,5 +48,18 @@ Inputs and outputs can be classified as being planter wide (one per planter) or 
 8. - [ ] Row context tracking based on planter raised sensor
 
 
+### Dev Requires
+- libfontconfig-dev
+
+
+## Build
+
+```
+export PKG_CONFIG_ALLOW_CROSS=1
+rustup target add armv7-unknown-linux-gnueabihf
+apt install gcc-arm-linux-gnueabihf
+cargo build --target=armv7-unknown-linux-gnueabihf
+```
+
 ## References
 - 
