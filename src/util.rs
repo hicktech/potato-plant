@@ -1,8 +1,8 @@
 // todo;; count the number of picks on the wheel
 const PICKS_ON_WHEEL: usize = 12;
 
-// todo;; confirm the number of ticks per rev
-const REVOLUTION_TICKS: usize = 360;
+// 100 tick encoder steps per seed wheel revolution
+const REVOLUTION_TICKS: usize = 340;
 
 pub fn row_feet_to_acres(ft: f32) -> f32 {
     ft / 14520.0
