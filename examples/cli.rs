@@ -13,8 +13,8 @@ use tokio::{select, time};
 
 #[derive(Parser)]
 struct Opts {
-    #[clap(default_value = "10")]
-    spacing: usize,
+    #[clap(default_value = "10.0")]
+    spacing: f32,
 
     #[clap(long)]
     speed: Option<f32>,
@@ -62,6 +62,9 @@ const PLANTER_LIFT_PIN: u8 = 4;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
+
+    let seed_spacing = opts.spacing;
+    println!("seed spacing: {seed_spacing}");
 
     // main messaging channel; analogous to the iced update function or subscription channel
     let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
@@ -179,13 +182,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     use Message::*;
 
     let mut timeout = time::interval(Duration::from_secs(1));
-    let seed_spacing = 10.0;
 
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
         //let target_tps = 10.0;
         let target_tps = ticks_per_pick() as f32 * target_sps;
+        let mut planter_lowered = false;
 
         select! {
             Some(msg) = msg_rx.recv() => {
@@ -197,7 +200,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     },
                     HopperFull(i) => hopper_relay_pins[i].write(Level::High),
                     HopperEmpty(i) => hopper_relay_pins[i].write(Level::Low),
-                    TickRate(tps) => {
+                    TickRate(tps) if planter_lowered => {
                         // automatically adjust the flow control
                         // todo;; perhaps automatic is not the best way to begin
                         match target_tps {
@@ -205,25 +208,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 println!("increase flow");
                                 // increase flow
                                 dc_motor.set_throttle(&mut pwm, 0.5).expect("throttle");
-                                thread::sleep(Duration::from_millis(500));
+                                thread::sleep(Duration::from_millis(50));
                                 dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
                             }
                             target if tps > target => {
                                 println!("reduce flow");
                                 // reduce flow
                                 dc_motor.set_throttle(&mut pwm, -0.5).expect("throttle");
-                                thread::sleep(Duration::from_millis(500));
+                                thread::sleep(Duration::from_millis(50));
                                 dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
                             }
                             _ => {
                                 // hold position
                                 dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle");
-                                dc_motor.stop(&mut pwm).expect("stop");
                             }
                         }
                     }
-                    PlanterRaised => println!("planter raised"),
-                    PlanterLowered => println!("planter lowered"),
+                    PlanterRaised => {
+                        println!("planter raised");
+                        planter_lowered = false;
+                        dc_motor.set_throttle(&mut pwm, -1.0).expect("throttle");
+                        thread::sleep(Duration::from_secs(2));
+                    },
+                    PlanterLowered => {
+                        println!("planter raised");
+                        planter_lowered = true;
+                    },
+                    _ => {}
                 }
             }
             _ = timeout.tick() => {
