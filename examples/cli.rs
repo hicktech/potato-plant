@@ -5,6 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use clap::Parser;
+use popl::gps;
 use rppal::gpio::{Gpio, Level, Trigger};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -14,6 +15,9 @@ use tokio::{select, time};
 struct Opts {
     #[clap(default_value = "10")]
     spacing: usize,
+
+    #[clap(long)]
+    speed: Option<f32>,
 }
 
 struct EncoderTick;
@@ -60,7 +64,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
 
     // main messaging channel; analogous to the iced update function or subscription channel
-    let (msg_tx, mut msg_rx) = mpsc::channel(5);
+    let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
+
+    // ground speed
+    let (speed_tx, mut speed_rx) = mpsc::channel(1);
+    let mut ground_speed = if let Some(set_speed) = opts.speed {
+        speed_tx.send(gps::GroundSpeed::Gps(set_speed));
+        set_speed
+    } else {
+        tokio::spawn(async {
+            gps::read_speed(speed_tx, "/dev/ttyACM0")
+                .await
+                .expect("gps read")
+        });
+        0.0f32
+    };
 
     // flow control
     let mut pwm = init_pwm(None)?;
@@ -96,7 +114,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // planter channel reports planter lift state to main message channel
     let (planter_lift_tx, mut planter_lift_rx) = mpsc::channel(1);
-    let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input();
+    let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input_pulldown();
     limit_planter_lift.set_async_interrupt(Trigger::Both, move |l| {
         match l {
             Level::Low => planter_lift_tx.blocking_send(PlanterLiftState::Lowered),
@@ -123,25 +141,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
             select! {
                 Some(h0state) = hopper0_rx.recv() => {
                     match h0state {
-                        HopperState::Full => {msg_tx.send(Message::HopperFull(0)).await;}
-                        HopperState::Empty => {msg_tx.send(Message::HopperEmpty(0)).await;}
+                        HopperState::Full => {msg_tx.send(Message::HopperFull(0)) ;}
+                        HopperState::Empty => {msg_tx.send(Message::HopperEmpty(0)) ;}
                     }
                 },
                 Some(h1state) = hopper1_rx.recv() => {
                     match h1state {
-                        HopperState::Full => {msg_tx.send(Message::HopperFull(1)).await;}
-                        HopperState::Empty => {msg_tx.send(Message::HopperEmpty(1)).await;}
+                        HopperState::Full => {msg_tx.send(Message::HopperFull(1)) ;}
+                        HopperState::Empty => {msg_tx.send(Message::HopperEmpty(1)) ;}
                     }
                 },
                 Some(e) = tick_rx.recv() => {tps += 1;},
                 Some(lift_state) = planter_lift_rx.recv() => {
                     match lift_state {
-                        PlanterLiftState::Raised => { msg_tx.send(Message::PlanterRaised).await; }
-                        PlanterLiftState::Lowered => { msg_tx.send(Message::PlanterLowered).await; }
+                        PlanterLiftState::Raised => { msg_tx.send(Message::PlanterRaised); }
+                        PlanterLiftState::Lowered => { msg_tx.send(Message::PlanterLowered); }
+                    }
+                },
+                Some(fix) = speed_rx.recv() => {
+                    match fix {
+                        gps::GroundSpeed::Gps(speed) => {
+                            msg_tx.send(Message::GroundSpeed(speed));
+                        },
+                        _ => {}
                     }
                 },
                 _ = interval.tick() => {
-                    msg_tx.send(Message::TickRate(tps as f32)).await;
+                    msg_tx.send(Message::TickRate(tps as f32));
                     tps = 0;
                 }
             }
@@ -153,22 +179,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     use Message::*;
 
     let mut timeout = time::interval(Duration::from_secs(1));
-    let mut ground_speed = 0.0f32;
     let seed_spacing = 10.0;
 
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
-        let target_tps = 10.0;
-        ///let target_tps = ticks_per_pick() as f32 * target_sps;
+        //let target_tps = 10.0;
+        let target_tps = ticks_per_pick() as f32 * target_sps;
 
         select! {
             Some(msg) = msg_rx.recv() => {
-                dbg!(&msg);
                 match msg {
-
-
-                    GroundSpeed(speed) => ground_speed = speed,
+                    GroundSpeed(speed) => {
+                        println!("Ground Speed: {speed}");
+                        println!("target sps {target_sps} for speed of {speed}");
+                        ground_speed = speed;
+                    },
                     HopperFull(i) => hopper_relay_pins[i].write(Level::High),
                     HopperEmpty(i) => hopper_relay_pins[i].write(Level::Low),
                     TickRate(tps) => {
@@ -191,8 +217,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             }
                             _ => {
                                 // hold position
-                                // dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle");
-                                // dc_motor.stop(&mut pwm).expect("stop");
+                                dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle");
+                                dc_motor.stop(&mut pwm).expect("stop");
                             }
                         }
                     }
