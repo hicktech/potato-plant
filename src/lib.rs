@@ -1,4 +1,5 @@
 pub mod app;
+pub mod gps;
 mod gui;
 pub mod io;
 pub mod monitor;
