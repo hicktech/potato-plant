@@ -163,7 +163,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // planter channel reports planter lift state to main message channel
     let (planter_lift_tx, mut planter_lift_rx) = mpsc::channel(1);
-    let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input_pulldown();
+    let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input_pullup();
 
     let mut limit_planter_lift_debounce = Instant::now();
     limit_planter_lift.set_async_interrupt(Trigger::Both, move |l| {
