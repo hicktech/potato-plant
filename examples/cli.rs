@@ -118,26 +118,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let debounce_millis = opts.debounce_time;
     let mut limit_pin_hopper0_debounce = Instant::now();
-    limit_pin_hopper0.set_async_interrupt(Trigger::Both, move |l| {
-        let now = Instant::now();
-        if now.duration_since(limit_pin_hopper0_debounce).as_millis() >= debounce_millis {
-            limit_pin_hopper0_debounce = now;
-            match l {
-                Level::Low => hopper0_tx.blocking_send(HopperState::Empty),
-                Level::High => hopper0_tx.blocking_send(HopperState::Full),
-            };
+    limit_pin_hopper0.set_async_interrupt(Trigger::Both, {
+        let mut empty = limit_pin_hopper0.read() == Level::Low;
+        println!("detected hopper 0 {}", if empty { "empty" } else { "full" });
+        if empty {
+            hopper0_tx.send(HopperState::Empty).await;
+        }
+        move |l| {
+            let now = Instant::now();
+            if now.duration_since(limit_pin_hopper0_debounce).as_millis() >= debounce_millis {
+                limit_pin_hopper0_debounce = now;
+                match l {
+                    Level::Low => hopper0_tx.blocking_send(HopperState::Empty),
+                    Level::High => hopper0_tx.blocking_send(HopperState::Full),
+                };
+            }
         }
     })?;
 
     let mut limit_pin_hopper1_debounce = Instant::now();
-    limit_pin_hopper1.set_async_interrupt(Trigger::Both, move |l| {
-        let now = Instant::now();
-        if now.duration_since(limit_pin_hopper1_debounce).as_millis() >= debounce_millis {
-            limit_pin_hopper1_debounce = now;
-            match l {
-                Level::Low => hopper1_tx.blocking_send(HopperState::Empty),
-                Level::High => hopper1_tx.blocking_send(HopperState::Full),
-            };
+    limit_pin_hopper1.set_async_interrupt(Trigger::Both, {
+        let mut empty = limit_pin_hopper1.read() == Level::Low;
+        println!("detected hopper 1 {}", if empty { "empty" } else { "full" });
+        if empty {
+            hopper1_tx.send(HopperState::Empty).await;
+        }
+        move |l| {
+            let now = Instant::now();
+            if now.duration_since(limit_pin_hopper1_debounce).as_millis() >= debounce_millis {
+                limit_pin_hopper1_debounce = now;
+                match l {
+                    Level::Low => hopper1_tx.blocking_send(HopperState::Empty),
+                    Level::High => hopper1_tx.blocking_send(HopperState::Full),
+                };
+            }
         }
     })?;
 
