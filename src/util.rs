@@ -29,3 +29,30 @@ pub fn seed_per_ticks(ticks: usize) -> usize {
 pub fn rpm_to_seed_per_second(rpm: f32) -> f32 {
     rpm * 60.0 / REVOLUTION_PICKS as f32
 }
+
+// 10 seeds per second
+// spaced 1 ft
+//
+pub fn sps_to_fps(sps: f32, in_between: f32) -> f32 {
+    sps * (12.0 / in_between)
+}
+
+pub fn sps_to_mph(sps: f32, in_between: f32) -> f32 {
+    sps_to_fps(sps, in_between) / 1.467
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let x = sps_to_fps(10.0, 12.0);
+        assert_eq!(x, 10.0);
+
+        let x = sps_to_mph(10.0, 12.0);
+        assert_eq!(x, 6.8166327);
+
+        assert_eq!(seed_per_ticks(340), 24);
+    }
+}

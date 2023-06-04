@@ -1,6 +1,7 @@
 use adafruit_motorkit::dc::DcMotor;
 use adafruit_motorkit::{init_pwm, Motor};
 use std::error::Error;
+use std::ops::Neg;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -14,6 +15,7 @@ use rppal::gpio::{Gpio, Level, Trigger};
 use rppal::pwm::Pwm;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
+use tokio::time::interval;
 use tokio::{select, time};
 
 #[derive(Parser)]
@@ -30,14 +32,24 @@ struct Opts {
     #[clap(long, default_value = "50")]
     debounce_time: u128,
 
-    #[clap(long, default_value = "0.1")]
+    #[clap(long, default_value = "1.0")]
     throttle_rate: f32,
 
-    #[clap(long, default_value = "10")]
+    #[clap(long, default_value = "50")]
     throttle_time: u64,
 
     #[clap(long)]
     disable_on_lift: bool,
+
+    #[clap(long)]
+    disable_speed: bool,
+
+    /// timeout for event loop (millis)
+    #[clap(long, default_value = "50")]
+    event_loop_time: u64,
+
+    #[clap(short, long)]
+    quiet: bool,
 }
 
 struct EncoderTick;
@@ -251,7 +263,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     use popl::util::*;
     use Message::*;
 
-    let mut timeout = time::interval(Duration::from_millis(250));
+    let mut timeout = time::interval(Duration::from_millis(opts.event_loop_time));
     let mut planter_lowered = limit_planter_lift.read() == Level::Low;
     println!(
         "detected planter {}",
@@ -262,6 +274,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
         let target_tps = ticks_per_pick() as f32 * target_sps;
+        let mph = sps_to_mph(
+            seed_per_ticks(tickrate.load(Ordering::Relaxed) as usize) as f32,
+            seed_spacing,
+        );
 
         select! {
             Some(msg) = msg_rx.recv() => {
@@ -307,11 +323,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ = timeout.tick() => {
                 use std::io::{self, Write};
 
-                if planter_lowered {
+                //if planter_lowered {
+                if !opts.disable_speed {
                     // automatically adjust the flow control
                     match tickrate.load(Ordering::Relaxed) {
                         tps if (tps as f32) < target_tps => {
-                            print!("+");
+                            //print!("+");
                             io::stdout().flush();
                             // increase flow
                             dc_motor.set_throttle(&mut pwm, opts.throttle_rate).expect("throttle +");
@@ -319,7 +336,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle + 0.0");
                         }
                         tps if (tps as f32) > target_tps => {
-                            print!("-");
+                            //print!("-");
                             io::stdout().flush();
                             // reduce flow
                             dc_motor.set_throttle(&mut pwm, -opts.throttle_rate).expect("throttle -");
@@ -328,10 +345,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         }
                         _ => {
                             // hold position
-                            println!(".");
+                            //println!(".");
                             io::stdout().flush();
                             dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle . 0.0");
                         }
+                    }
+                } else {
+                    if !opts.quiet{
+                        println!("target mph: {mph}");
                     }
                 }
             }
