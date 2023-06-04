@@ -28,6 +28,12 @@ struct Opts {
     /// debounce time for switches (millis)
     #[clap(long, default_value = "50")]
     debounce_time: u128,
+
+    #[clap(long, default_value = "0.1")]
+    throttle_rate: f32,
+
+    #[clap(long, default_value = "10")]
+    throttle_time: u64,
 }
 
 struct EncoderTick;
@@ -265,26 +271,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             _ = timeout.tick() => {
+                use std::io::{self, Write};
+
                 // automatically adjust the flow control
                 match tickrate.load(Ordering::Relaxed) {
                     tps if (tps as f32) < target_tps => {
-                        println!("increase flow");
+                        print!("+");
+                        io::stdout().flush();
                         // increase flow
-                        dc_motor.set_throttle(&mut pwm, 0.5).expect("throttle");
-                        thread::sleep(Duration::from_millis(50));
-                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
+                        dc_motor.set_throttle(&mut pwm, opts.throttle_rate).expect("throttle +");
+                        thread::sleep(Duration::from_millis(opts.throttle_time));
+                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle + 0.0");
                     }
                     tps if (tps as f32) > target_tps => {
-                        println!("reduce flow");
+                        print!("-");
+                        io::stdout().flush();
                         // reduce flow
-                        dc_motor.set_throttle(&mut pwm, -0.5).expect("throttle");
-                        thread::sleep(Duration::from_millis(50));
-                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
+                        dc_motor.set_throttle(&mut pwm, -opts.throttle_rate).expect("throttle -");
+                        thread::sleep(Duration::from_millis(opts.throttle_time));
+                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle - 0.0");
                     }
                     _ => {
                         // hold position
-                        println!("HOLD flow");
-                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle");
+                        println!(".");
+                        io::stdout().flush();
+                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle . 0.0");
                     }
                 }
             }
