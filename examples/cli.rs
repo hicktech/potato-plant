@@ -234,12 +234,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     use Message::*;
 
     let mut timeout = time::interval(Duration::from_millis(250));
+    let mut planter_lowered = limit_planter_lift.read() == Level::Low;
+    println!(
+        "detected planter {}",
+        if planter_lowered { "lowered" } else { "raised" }
+    );
 
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
         let target_tps = ticks_per_pick() as f32 * target_sps;
-        let mut planter_lowered = false;
 
         select! {
             Some(msg) = msg_rx.recv() => {
@@ -273,29 +277,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ = timeout.tick() => {
                 use std::io::{self, Write};
 
-                // automatically adjust the flow control
-                match tickrate.load(Ordering::Relaxed) {
-                    tps if (tps as f32) < target_tps => {
-                        print!("+");
-                        io::stdout().flush();
-                        // increase flow
-                        dc_motor.set_throttle(&mut pwm, opts.throttle_rate).expect("throttle +");
-                        thread::sleep(Duration::from_millis(opts.throttle_time));
-                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle + 0.0");
-                    }
-                    tps if (tps as f32) > target_tps => {
-                        print!("-");
-                        io::stdout().flush();
-                        // reduce flow
-                        dc_motor.set_throttle(&mut pwm, -opts.throttle_rate).expect("throttle -");
-                        thread::sleep(Duration::from_millis(opts.throttle_time));
-                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle - 0.0");
-                    }
-                    _ => {
-                        // hold position
-                        println!(".");
-                        io::stdout().flush();
-                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle . 0.0");
+                if planter_lowered {
+                    // automatically adjust the flow control
+                    match tickrate.load(Ordering::Relaxed) {
+                        tps if (tps as f32) < target_tps => {
+                            print!("+");
+                            io::stdout().flush();
+                            // increase flow
+                            dc_motor.set_throttle(&mut pwm, opts.throttle_rate).expect("throttle +");
+                            thread::sleep(Duration::from_millis(opts.throttle_time));
+                            dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle + 0.0");
+                        }
+                        tps if (tps as f32) > target_tps => {
+                            print!("-");
+                            io::stdout().flush();
+                            // reduce flow
+                            dc_motor.set_throttle(&mut pwm, -opts.throttle_rate).expect("throttle -");
+                            thread::sleep(Duration::from_millis(opts.throttle_time));
+                            dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle - 0.0");
+                        }
+                        _ => {
+                            // hold position
+                            println!(".");
+                            io::stdout().flush();
+                            dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle . 0.0");
+                        }
                     }
                 }
             }
