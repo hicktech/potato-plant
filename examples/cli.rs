@@ -1,10 +1,14 @@
 use adafruit_motorkit::dc::DcMotor;
 use adafruit_motorkit::{init_pwm, Motor};
 use std::error::Error;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use build_time::build_time_local;
 use clap::Parser;
+use crossbeam_channel::tick;
 use popl::gps;
 use rppal::gpio::{Gpio, Level, Trigger};
 use tokio::sync::mpsc;
@@ -13,14 +17,22 @@ use tokio::{select, time};
 
 #[derive(Parser)]
 struct Opts {
-    #[clap(default_value = "10.0")]
+    /// target seed spacing
+    #[clap(long, default_value = "10.0")]
     spacing: f32,
 
+    /// fixed speed
     #[clap(long)]
     speed: Option<f32>,
+
+    /// debounce time for switches (millis)
+    #[clap(long, default_value = "50")]
+    debounce_time: u128,
 }
 
 struct EncoderTick;
+struct EncoderTickRate(f32);
+
 enum HopperState {
     Empty,
     Full,
@@ -34,7 +46,6 @@ enum PlanterLiftState {
 #[derive(Debug)]
 enum Message {
     GroundSpeed(f32),
-    TickRate(f32),
     HopperFull(usize),
     HopperEmpty(usize),
     PlanterRaised,
@@ -61,10 +72,14 @@ const PLANTER_LIFT_PIN: u8 = 4;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let local_build_time = build_time_local!("%Y-%m-%dT%H:%M:%S%.f%:z");
+
     let opts: Opts = Opts::parse();
 
     let seed_spacing = opts.spacing;
+    println!("build time: {local_build_time}");
     println!("seed spacing: {seed_spacing}");
+    println!("fixed speed: {:?}", opts.speed);
 
     // main messaging channel; analogous to the iced update function or subscription channel
     let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
@@ -92,21 +107,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (hopper1_tx, mut hopper1_rx) = mpsc::channel(1);
 
     // limit switch per hopper
-    let mut limit_pin_hopper0 = Gpio::new()?.get(HOPPER_LIMIT_0)?.into_input_pulldown();
-    let mut limit_pin_hopper1 = Gpio::new()?.get(HOPPER_LIMIT_1)?.into_input_pulldown();
+    let mut limit_pin_hopper0 = Gpio::new()?.get(HOPPER_LIMIT_0)?.into_input_pullup();
+    let mut limit_pin_hopper1 = Gpio::new()?.get(HOPPER_LIMIT_1)?.into_input_pullup();
 
+    let debounce_millis = opts.debounce_time;
+    let mut limit_pin_hopper0_debounce = Instant::now();
     limit_pin_hopper0.set_async_interrupt(Trigger::Both, move |l| {
-        match l {
-            Level::Low => hopper0_tx.blocking_send(HopperState::Empty),
-            Level::High => hopper0_tx.blocking_send(HopperState::Full),
-        };
+        let now = Instant::now();
+        if now.duration_since(limit_pin_hopper0_debounce).as_millis() >= debounce_millis {
+            limit_pin_hopper0_debounce = now;
+            match l {
+                Level::Low => hopper0_tx.blocking_send(HopperState::Empty),
+                Level::High => hopper0_tx.blocking_send(HopperState::Full),
+            };
+        }
     })?;
 
+    let mut limit_pin_hopper1_debounce = Instant::now();
     limit_pin_hopper1.set_async_interrupt(Trigger::Both, move |l| {
-        match l {
-            Level::Low => hopper1_tx.blocking_send(HopperState::Empty),
-            Level::High => hopper1_tx.blocking_send(HopperState::Full),
-        };
+        let now = Instant::now();
+        if now.duration_since(limit_pin_hopper1_debounce).as_millis() >= debounce_millis {
+            limit_pin_hopper1_debounce = now;
+            match l {
+                Level::Low => hopper1_tx.blocking_send(HopperState::Empty),
+                Level::High => hopper1_tx.blocking_send(HopperState::Full),
+            };
+        }
     })?;
 
     // hopper feed belts relay control pins
@@ -118,11 +144,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // planter channel reports planter lift state to main message channel
     let (planter_lift_tx, mut planter_lift_rx) = mpsc::channel(1);
     let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input_pulldown();
+
+    let mut limit_planter_lift_debounce = Instant::now();
     limit_planter_lift.set_async_interrupt(Trigger::Both, move |l| {
-        match l {
-            Level::Low => planter_lift_tx.blocking_send(PlanterLiftState::Lowered),
-            Level::High => planter_lift_tx.blocking_send(PlanterLiftState::Raised),
-        };
+        let now = Instant::now();
+        if now.duration_since(limit_planter_lift_debounce).as_millis() >= debounce_millis {
+            limit_planter_lift_debounce = now;
+            match l {
+                Level::Low => planter_lift_tx.blocking_send(PlanterLiftState::Lowered),
+                Level::High => planter_lift_tx.blocking_send(PlanterLiftState::Raised),
+            };
+        }
     })?;
 
     // encoder channel reports encoder ticks to main message channel
@@ -131,15 +163,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
         read_encoder(tick_tx);
     });
 
-    // aggregate various inputs into messages
+    //let (tickrate_tx, mut tickrate_rx) = mpsc::channel(1);
+    let tickrate = Arc::new(AtomicU32::new(0));
+    tokio::spawn({
+        let tickrate = tickrate.clone();
+        async move {
+            // aggrated ticks into tick per second measurement
+            let mut interval = time::interval(Duration::from_secs(1));
+            let mut current_ticks = 0;
+
+            loop {
+                select! {
+                    Some(e) = tick_rx.recv() => { current_ticks += 1; },
+                     _ = interval.tick() => {
+                         //tickrate_tx.send(EncoderTickRate(tps as f32));
+                         let last_rate = tickrate.load(Ordering::Relaxed);
+                         if last_rate != current_ticks {
+                            println!("ticks rate change: {} => {}", last_rate, current_ticks);
+                            tickrate.store(current_ticks, Ordering::Relaxed);
+                            current_ticks = 0;
+                        }
+                     }
+                }
+            }
+        }
+    });
+
+    // aggregate input channels into message channel
     tokio::task::spawn(async move {
-        // timeout used to aggrated ticks into tick per second measurement
-        let mut interval = time::interval(Duration::from_secs(1));
-
-        // ticks in the current second
-        let mut tps = 0i32;
-
-        //
         loop {
             select! {
                 Some(h0state) = hopper0_rx.recv() => {
@@ -154,7 +205,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         HopperState::Empty => {msg_tx.send(Message::HopperEmpty(1)) ;}
                     }
                 },
-                Some(e) = tick_rx.recv() => {tps += 1;},
                 Some(lift_state) = planter_lift_rx.recv() => {
                     match lift_state {
                         PlanterLiftState::Raised => { msg_tx.send(Message::PlanterRaised); }
@@ -169,10 +219,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         _ => {}
                     }
                 },
-                _ = interval.tick() => {
-                    msg_tx.send(Message::TickRate(tps as f32));
-                    tps = 0;
-                }
             }
         }
     });
@@ -181,12 +227,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     use popl::util::*;
     use Message::*;
 
-    let mut timeout = time::interval(Duration::from_secs(1));
+    let mut timeout = time::interval(Duration::from_millis(250));
 
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
-        //let target_tps = 10.0;
         let target_tps = ticks_per_pick() as f32 * target_sps;
         let mut planter_lowered = false;
 
@@ -198,47 +243,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         println!("target sps {target_sps} for speed of {speed}");
                         ground_speed = speed;
                     },
-                    HopperFull(i) => hopper_relay_pins[i].write(Level::High),
-                    HopperEmpty(i) => hopper_relay_pins[i].write(Level::Low),
-                    TickRate(tps) if planter_lowered => {
-                        // automatically adjust the flow control
-                        // todo;; perhaps automatic is not the best way to begin
-                        match target_tps {
-                            target if tps < target => {
-                                println!("increase flow");
-                                // increase flow
-                                dc_motor.set_throttle(&mut pwm, 0.5).expect("throttle");
-                                thread::sleep(Duration::from_millis(50));
-                                dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
-                            }
-                            target if tps > target => {
-                                println!("reduce flow");
-                                // reduce flow
-                                dc_motor.set_throttle(&mut pwm, -0.5).expect("throttle");
-                                thread::sleep(Duration::from_millis(50));
-                                dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
-                            }
-                            _ => {
-                                // hold position
-                                dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle");
-                            }
-                        }
-                    }
+                    HopperFull(i) => {
+                        println!("hopper {i} full {msg:?}");
+                        hopper_relay_pins[i].write(Level::High)
+                    },
+                    HopperEmpty(i) => {
+                        println!("hopper {i} empty {msg:?}");
+                        hopper_relay_pins[i].write(Level::Low)
+                    },
                     PlanterRaised => {
                         println!("planter raised");
                         planter_lowered = false;
                         dc_motor.set_throttle(&mut pwm, -1.0).expect("throttle");
+                        // todo;; keep an eye on this =============================================
                         thread::sleep(Duration::from_secs(2));
                     },
                     PlanterLowered => {
-                        println!("planter raised");
+                        println!("planter lowered");
                         planter_lowered = true;
                     },
-                    _ => {}
                 }
             }
             _ = timeout.tick() => {
-                continue;
+                // automatically adjust the flow control
+                match tickrate.load(Ordering::Relaxed) {
+                    tps if (tps as f32) < target_tps => {
+                        println!("increase flow");
+                        // increase flow
+                        dc_motor.set_throttle(&mut pwm, 0.5).expect("throttle");
+                        thread::sleep(Duration::from_millis(50));
+                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
+                    }
+                    tps if (tps as f32) > target_tps => {
+                        println!("reduce flow");
+                        // reduce flow
+                        dc_motor.set_throttle(&mut pwm, -0.5).expect("throttle");
+                        thread::sleep(Duration::from_millis(50));
+                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle2");
+                    }
+                    _ => {
+                        // hold position
+                        println!("HOLD flow");
+                        dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle");
+                    }
+                }
             }
         }
     }
@@ -266,7 +314,7 @@ fn read_encoder(mut tx: Sender<EncoderTick>) -> Result<(), Box<dyn Error>> {
 
             state = 0;
             tx.blocking_send(EncoderTick);
-            println!("idx {}", encoder_idx);
+            //println!("idx {}", encoder_idx);
         }
     }
 
