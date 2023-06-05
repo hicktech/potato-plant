@@ -22,8 +22,8 @@ pub fn ticks_per_pick() -> usize {
     REVOLUTION_TICKS / REVOLUTION_PICKS
 }
 
-pub fn seed_per_ticks(ticks: usize) -> usize {
-    ticks / ticks_per_pick()
+pub fn seed_per_ticks(ticks: usize) -> f32 {
+    ticks as f32 / ticks_per_pick() as f32
 }
 
 pub fn rpm_to_seed_per_second(rpm: f32) -> f32 {
@@ -54,5 +54,7 @@ mod tests {
         assert_eq!(x, 6.8166327);
 
         assert_eq!(seed_per_ticks(340), 24);
+
+        assert_eq!(mph_to_fps(10.0), 14.67)
     }
 }
