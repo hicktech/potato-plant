@@ -132,44 +132,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut limit_pin_hopper0 = Gpio::new()?.get(HOPPER_LIMIT_0)?.into_input_pullup();
     let mut limit_pin_hopper1 = Gpio::new()?.get(HOPPER_LIMIT_1)?.into_input_pullup();
 
-    let debounce_millis = opts.debounce_time;
-    let mut limit_pin_hopper0_debounce = Instant::now();
-    limit_pin_hopper0.set_async_interrupt(Trigger::Both, {
-        let mut empty = limit_pin_hopper0.read() == Level::Low;
-        println!("detected hopper 0 {}", if empty { "empty" } else { "full" });
-        if empty {
-            hopper0_tx.send(HopperState::Empty).await;
+    let mut hopper_check_interval = time::interval(Duration::from_secs(1));
+    tokio::spawn(async move {
+        loop {
+            match limit_pin_hopper0.read() {
+                Level::Low => hopper0_tx.send(HopperState::Empty).await,
+                Level::High => hopper0_tx.send(HopperState::Full).await,
+            };
+            match limit_pin_hopper1.read() {
+                Level::Low => hopper1_tx.send(HopperState::Empty).await,
+                Level::High => hopper1_tx.send(HopperState::Full).await,
+            };
+            hopper_check_interval.tick().await;
         }
-        move |l| {
-            let now = Instant::now();
-            if now.duration_since(limit_pin_hopper0_debounce).as_millis() >= debounce_millis {
-                limit_pin_hopper0_debounce = now;
-                match l {
-                    Level::Low => hopper0_tx.blocking_send(HopperState::Empty),
-                    Level::High => hopper0_tx.blocking_send(HopperState::Full),
-                };
-            }
-        }
-    })?;
-
-    let mut limit_pin_hopper1_debounce = Instant::now();
-    limit_pin_hopper1.set_async_interrupt(Trigger::Both, {
-        let mut empty = limit_pin_hopper1.read() == Level::Low;
-        println!("detected hopper 1 {}", if empty { "empty" } else { "full" });
-        if empty {
-            hopper1_tx.send(HopperState::Empty).await;
-        }
-        move |l| {
-            let now = Instant::now();
-            if now.duration_since(limit_pin_hopper1_debounce).as_millis() >= debounce_millis {
-                limit_pin_hopper1_debounce = now;
-                match l {
-                    Level::Low => hopper1_tx.blocking_send(HopperState::Empty),
-                    Level::High => hopper1_tx.blocking_send(HopperState::Full),
-                };
-            }
-        }
-    })?;
+    });
 
     // hopper feed belts relay control pins
     let mut hopper_relay_pins = [
@@ -181,6 +157,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (planter_lift_tx, mut planter_lift_rx) = mpsc::channel(1);
     let mut limit_planter_lift = Gpio::new()?.get(PLANTER_LIFT_PIN)?.into_input_pullup();
 
+    let debounce_millis = opts.debounce_time;
     let mut limit_planter_lift_debounce = Instant::now();
     limit_planter_lift.set_async_interrupt(Trigger::Both, move |l| {
         let now = Instant::now();
