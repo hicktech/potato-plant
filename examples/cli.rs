@@ -100,8 +100,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let seed_spacing = opts.spacing;
     println!("build time: {local_build_time}");
-    println!("seed spacing: {seed_spacing}");
     println!("fixed speed: {:?}", opts.speed);
+    println!("=== seed spacing: {seed_spacing} inches ===");
 
     // main messaging channel; analogous to the iced update function or subscription channel
     let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
@@ -189,13 +189,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 select! {
                     Some(e) = tick_rx.recv() => { current_ticks += 1; },
                      _ = interval.tick() => {
-                         //tickrate_tx.send(EncoderTickRate(tps as f32));
                          let last_rate = tickrate.load(Ordering::Relaxed);
                          if last_rate != current_ticks {
                             println!("ticks rate change: {} => {}", last_rate, current_ticks);
-                            tickrate.store(current_ticks, Ordering::Relaxed);
-                            current_ticks = 0;
-                        }
+                         }
+                         tickrate.store(current_ticks, Ordering::Relaxed);
+                         current_ticks = 0;
                      }
                 }
             }
@@ -246,30 +245,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "detected planter {}",
         if planter_lowered { "lowered" } else { "raised" }
     );
+    let mut prev_mph = 0.0;
 
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
         let target_tps = ticks_per_pick() as f32 * target_sps;
-        let mph = sps_to_mph(
-            seed_per_ticks(tickrate.load(Ordering::Relaxed) as usize) as f32,
-            seed_spacing,
-        );
 
         select! {
             Some(msg) = msg_rx.recv() => {
                 match msg {
                     GroundSpeed(speed) => {
-                        println!("Ground Speed: {speed}");
-                        println!("target sps {target_sps} for speed of {speed}");
+                        println!("Ground Speed: {speed}, SPS: {target_sps}");
                         ground_speed = speed;
                     },
                     HopperFull(i) => {
-                        println!("hopper {i} full");
+                        //println!("hopper {i} full");
                         hopper_relay_pins[i].write(Level::High)
                     },
                     HopperEmpty(i) => {
-                        println!("hopper {i} empty");
+                        //println!("hopper {i} empty");
                         hopper_relay_pins[i].write(Level::Low)
                     },
                     PlanterRaised => {
@@ -300,10 +295,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ = timeout.tick() => {
                 use std::io::{self, Write};
 
+                let tickrate = tickrate.load(Ordering::Relaxed);
+                let mph = sps_to_mph(seed_per_ticks(tickrate as usize) as f32, seed_spacing);
+                let sps = tickrate  as f32 / ticks_per_pick()  as f32;
+
                 //if planter_lowered {
                 if !opts.disable_speed {
                     // automatically adjust the flow control
-                    match tickrate.load(Ordering::Relaxed) {
+                    match tickrate {
                         tps if (tps as f32) < target_tps => {
                             //print!("+");
                             io::stdout().flush();
@@ -316,7 +315,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             //print!("-");
                             io::stdout().flush();
                             // reduce flow
-                            dc_motor.set_throttle(&mut pwm, -opts.throttle_rate).expect("throttle -");
+                            dc_motor.set_throttle(&mut pwm, opts.throttle_rate.neg()).expect("throttle -");
                             thread::sleep(Duration::from_millis(opts.throttle_time));
                             dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle - 0.0");
                         }
@@ -328,10 +327,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                 } else {
-                    if !opts.quiet{
-                        println!("target mph: {mph}");
+                    if !opts.quiet && mph != prev_mph {
+                        println!("target mph: {mph}  ======  {sps} sps");
                     }
                 }
+
+                prev_mph = mph;
             }
         }
     }
