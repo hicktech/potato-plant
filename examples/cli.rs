@@ -247,10 +247,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
     let mut prev_mph = 0.0;
 
+    // the main event loop
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
-        let target_tps = ticks_per_pick() as f32 * target_sps;
+        let target_tps = ticks_per_pick() * target_sps as usize;
 
         select! {
             Some(msg) = msg_rx.recv() => {
@@ -296,8 +297,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 use std::io::{self, Write};
 
                 let tickrate = tickrate.load(Ordering::Relaxed);
-                let mph = sps_to_mph(seed_per_ticks(tickrate as usize) as f32, seed_spacing);
-                let sps = tickrate  as f32 / ticks_per_pick()  as f32;
+                let mph = sps_to_mph(seed_per_ticks(tickrate), seed_spacing);
+                let sps = sps_from_tickrate(tickrate);
 
                 //if planter_lowered {
                 if !opts.disable_speed {

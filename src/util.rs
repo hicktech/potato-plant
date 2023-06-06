@@ -41,6 +41,10 @@ pub fn sps_to_mph(sps: f32, in_between: f32) -> f32 {
     sps_to_fps(sps, in_between) / 1.467
 }
 
+pub fn sps_from_tickrate(tickrate: usize) -> f32 {
+    tickrate as f32 / ticks_per_pick() as f32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
