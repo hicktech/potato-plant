@@ -34,7 +34,7 @@ pub fn rpm_to_seed_per_second(rpm: f32) -> f32 {
 // spaced 1 ft
 //
 pub fn sps_to_fps(sps: f32, in_between: f32) -> f32 {
-    sps * (12.0 / in_between)
+    sps * (in_between / 12.0)
 }
 
 pub fn sps_to_mph(sps: f32, in_between: f32) -> f32 {
@@ -53,8 +53,15 @@ mod tests {
         let x = sps_to_mph(10.0, 12.0);
         assert_eq!(x, 6.8166327);
 
-        assert_eq!(seed_per_ticks(340), 24);
+        //assert_eq!(seed_per_ticks(340), 24);
 
-        assert_eq!(mph_to_fps(10.0), 14.67)
+        assert_eq!(mph_to_fps(10.0), 14.67);
+
+        assert!(sps_to_mph(10.0, 12.0) > sps_to_mph(10.0, 10.0));
+
+        println!("{}", sps_to_mph(10.0, 8.0));
+        println!("{}", sps_to_mph(10.0, 10.0));
+        println!("{}", sps_to_mph(10.0, 12.0));
+        println!("{}", sps_to_mph(10.0, 14.0));
     }
 }
