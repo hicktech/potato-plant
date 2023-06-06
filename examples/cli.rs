@@ -2,7 +2,7 @@ use adafruit_motorkit::dc::DcMotor;
 use adafruit_motorkit::{init_pwm, Motor};
 use std::error::Error;
 use std::ops::Neg;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -54,6 +54,11 @@ struct Opts {
 
 struct EncoderTick;
 struct EncoderTickRate(f32);
+
+enum Rate {
+    Up(usize),
+    Down(usize),
+}
 
 enum HopperState {
     Empty,
@@ -177,7 +182,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     //let (tickrate_tx, mut tickrate_rx) = mpsc::channel(1);
-    let tickrate = Arc::new(AtomicU32::new(0));
+    let tickrate = Arc::new(AtomicUsize::new(0));
     tokio::spawn({
         let tickrate = tickrate.clone();
         async move {
@@ -235,7 +240,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    // the decision maker
+    let (speed_tx, mut speed_rx) = mpsc::channel(1);
+    // todo;; mutex instead?
+    let changing_speed = Arc::new(AtomicBool::default());
+    tokio::task::spawn({
+        let changing_speed = changing_speed.clone();
+        async move {
+            use std::io::{self, Write};
+
+            while let Some(x) = speed_rx.recv().await {
+                changing_speed.store(true, Ordering::Relaxed);
+                match x {
+                    Rate::Up(n) => {
+                        //print!("+");
+                        io::stdout().flush();
+                        // increase flow
+                        dc_motor
+                            .set_throttle(&mut pwm, opts.throttle_rate)
+                            .expect("throttle +");
+                        thread::sleep(Duration::from_millis(opts.throttle_time));
+                        dc_motor
+                            .set_throttle(&mut pwm, 0.0)
+                            .expect("throttle + 0.0");
+                    }
+                    Rate::Down(n) => {
+                        //print!("-");
+                        io::stdout().flush();
+                        // reduce flow
+                        dc_motor
+                            .set_throttle(&mut pwm, opts.throttle_rate.neg())
+                            .expect("throttle -");
+                        thread::sleep(Duration::from_millis(opts.throttle_time));
+                        dc_motor
+                            .set_throttle(&mut pwm, 0.0)
+                            .expect("throttle - 0.0");
+                    }
+                }
+                changing_speed.store(false, Ordering::Relaxed);
+            }
+        }
+    });
+
     use popl::util::*;
     use Message::*;
 
@@ -251,7 +296,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         let fps = mph_to_fps(ground_speed);
         let target_sps = fps_to_sps(fps, seed_spacing);
-        let target_tps = ticks_per_pick() * target_sps as usize;
+        let target_tps = sps_to_tickrate(target_sps);
 
         select! {
             Some(msg) = msg_rx.recv() => {
@@ -294,43 +339,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             _ = timeout.tick() => {
-                use std::io::{self, Write};
-
                 let tickrate = tickrate.load(Ordering::Relaxed);
                 let mph = sps_to_mph(seed_per_ticks(tickrate), seed_spacing);
                 let sps = sps_from_tickrate(tickrate);
 
                 //if planter_lowered {
-                if !opts.disable_speed {
+                if !opts.disable_speed && !changing_speed.load(Ordering::Relaxed) {
                     // automatically adjust the flow control
                     match tickrate {
-                        tps if (tps as f32) < target_tps => {
-                            //print!("+");
-                            io::stdout().flush();
-                            // increase flow
-                            dc_motor.set_throttle(&mut pwm, opts.throttle_rate).expect("throttle +");
-                            thread::sleep(Duration::from_millis(opts.throttle_time));
-                            dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle + 0.0");
-                        }
-                        tps if (tps as f32) > target_tps => {
-                            //print!("-");
-                            io::stdout().flush();
-                            // reduce flow
-                            dc_motor.set_throttle(&mut pwm, opts.throttle_rate.neg()).expect("throttle -");
-                            thread::sleep(Duration::from_millis(opts.throttle_time));
-                            dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle - 0.0");
-                        }
-                        _ => {
-                            // hold position
-                            //println!(".");
-                            io::stdout().flush();
-                            dc_motor.set_throttle(&mut pwm, 0.0).expect("throttle . 0.0");
-                        }
-                    }
+                        tps if tps < target_tps => {
+                            speed_tx.blocking_send(Rate::Up(target_tps - tps));
+                        },
+                        tps if tps > target_tps => {
+                            speed_tx.blocking_send(Rate::Down(tps-target_tps));
+                        },
+                        _ => {},
+                    };
                 } else {
                     if !opts.quiet && mph != prev_mph {
                         println!("target mph: {mph}  ======  {sps} sps");
-                    }
+                    };
                 }
 
                 prev_mph = mph;
