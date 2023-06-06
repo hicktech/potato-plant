@@ -164,8 +164,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         if now.duration_since(limit_planter_lift_debounce).as_millis() >= debounce_millis {
             limit_planter_lift_debounce = now;
             match l {
-                Level::Low => planter_lift_tx.blocking_send(PlanterLiftState::Lowered),
-                Level::High => planter_lift_tx.blocking_send(PlanterLiftState::Raised),
+                Level::Low => planter_lift_tx.blocking_send(PlanterLiftState::Raised),
+                Level::High => planter_lift_tx.blocking_send(PlanterLiftState::Lowered),
             };
         }
     })?;
