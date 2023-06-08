@@ -243,43 +243,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (speed_tx, mut speed_rx) = mpsc::channel(1);
     // todo;; mutex instead?
     let changing_speed = Arc::new(AtomicBool::default());
-    tokio::task::spawn({
-        let changing_speed = changing_speed.clone();
-        async move {
-            use std::io::{self, Write};
+    if !opts.disable_speed {
+        dc_motor
+            .set_throttle(&mut pwm, -1.0)
+            .expect("init throttle -");
+        thread::sleep(Duration::from_secs(2));
 
-            while let Some(x) = speed_rx.recv().await {
-                changing_speed.store(true, Ordering::Relaxed);
-                match x {
-                    Rate::Up(n) => {
-                        //print!("+");
-                        io::stdout().flush();
-                        // increase flow
-                        dc_motor
-                            .set_throttle(&mut pwm, opts.throttle_rate)
-                            .expect("throttle +");
-                        thread::sleep(Duration::from_millis(opts.throttle_time));
-                        dc_motor
-                            .set_throttle(&mut pwm, 0.0)
-                            .expect("throttle + 0.0");
+        tokio::task::spawn({
+            let changing_speed = changing_speed.clone();
+            async move {
+                use std::io::{self, Write};
+
+                while let Some(x) = speed_rx.recv().await {
+                    changing_speed.store(true, Ordering::Relaxed);
+                    match x {
+                        Rate::Up(n) => {
+                            print!("+");
+                            io::stdout().flush();
+                            // increase flow
+                            dc_motor
+                                .set_throttle(&mut pwm, opts.throttle_rate)
+                                .expect("throttle +");
+                            time::interval(Duration::from_millis(opts.throttle_time))
+                                .tick()
+                                .await;
+                            dc_motor
+                                .set_throttle(&mut pwm, 0.0)
+                                .expect("throttle + 0.0");
+                        }
+                        Rate::Down(n) => {
+                            print!("-");
+                            io::stdout().flush();
+                            // reduce flow
+                            dc_motor
+                                .set_throttle(&mut pwm, opts.throttle_rate.neg())
+                                .expect("throttle -");
+                            time::interval(Duration::from_millis(opts.throttle_time))
+                                .tick()
+                                .await;
+                            dc_motor
+                                .set_throttle(&mut pwm, 0.0)
+                                .expect("throttle - 0.0");
+                        }
                     }
-                    Rate::Down(n) => {
-                        //print!("-");
-                        io::stdout().flush();
-                        // reduce flow
-                        dc_motor
-                            .set_throttle(&mut pwm, opts.throttle_rate.neg())
-                            .expect("throttle -");
-                        thread::sleep(Duration::from_millis(opts.throttle_time));
-                        dc_motor
-                            .set_throttle(&mut pwm, 0.0)
-                            .expect("throttle - 0.0");
-                    }
+                    changing_speed.store(false, Ordering::Relaxed);
                 }
-                changing_speed.store(false, Ordering::Relaxed);
             }
-        }
-    });
+        });
+    }
 
     use popl::util::*;
     use Message::*;
