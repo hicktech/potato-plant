@@ -38,18 +38,22 @@ Inputs and outputs can be classified as being planter wide (one per planter) or 
 
 ## Roadmap
 
-1. - [ ] Seed belt control
-2. - [ ] Pick wheel flow control
-3. - [ ] Pick wheel speed sensor
-4. - [ ] Planter raised sensor
-5. - [ ] GPS speed sensor
-6. - [ ] Hopper fill sensor
-7. - [ ] Seed sensor eye
+1. - [X] Seed belt control
+2. - [X] Pick wheel flow control
+3. - [X] Pick wheel speed sensor
+4. - [X] Planter raised sensor
+5. - [X] GPS speed sensor
+6. - [X] Hopper fill sensor
+7. - [ ] Seed sensor (eye)
 8. - [ ] Row context tracking based on planter raised sensor
+9. - [ ] J1939 speed sensor
+10. - [ ] Auto seed wheel speed control
+11. - [ ] Seed placement metrics based on seed sensor
 
 
-### Dev Requires
+### Required for building
 - libfontconfig-dev
+- libudev-dev
 
 
 ## Build
@@ -60,6 +64,10 @@ rustup target add armv7-unknown-linux-gnueabihf
 apt install gcc-arm-linux-gnueabihf
 cargo build --target=armv7-unknown-linux-gnueabihf
 ```
+
+## Notes
+- journal everything and resume seamlessly
+- 
 
 ## References
 - 
