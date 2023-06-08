@@ -22,19 +22,16 @@ pub async fn read_speed(tx: Sender<GroundSpeed>, port_name: &str) -> io::Result<
         match port.read(serial_buf.as_mut_slice()) {
             Ok(t) => {
                 if t > 0 {
-                    if let Ok(SentenceType::RMC) =
-                        nmea.parse(std::str::from_utf8(&serial_buf[..t]).unwrap())
-                    {
+                    if let Ok(_) = nmea.parse(std::str::from_utf8(&serial_buf[..t]).unwrap()) {
                         match nmea.speed_over_ground {
-                            Some(speed) => {
-                                if speed != last_speed {
-                                    last_speed = speed;
-                                    tx.send(GroundSpeed::Gps(speed)).await;
-                                }
+                            Some(speed) if speed != last_speed => {
+                                last_speed = speed;
+                                tx.send(GroundSpeed::Gps(speed)).await;
                             }
                             None => {
                                 tx.send(GroundSpeed::Unavailable).await;
                             }
+                            _ => {}
                         };
                     }
                 }
