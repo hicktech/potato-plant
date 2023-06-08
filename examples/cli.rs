@@ -348,10 +348,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     // automatically adjust the flow control
                     match tickrate {
                         tps if tps < target_tps => {
-                            speed_tx.blocking_send(Rate::Up(target_tps - tps));
+                            speed_tx.send(Rate::Up(target_tps - tps)).await;
                         },
                         tps if tps > target_tps => {
-                            speed_tx.blocking_send(Rate::Down(tps-target_tps));
+                            speed_tx.send(Rate::Down(tps-target_tps)).await;
                         },
                         _ => {},
                     };
