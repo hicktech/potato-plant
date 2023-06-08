@@ -326,22 +326,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     },
                     PlanterRaised => {
                         println!("planter raised - dol[{}]", opts.disable_on_lift);
-                        // if opts.disable_on_lift {
-                        //     planter_lowered = false;
-                        //     dc_motor.set_throttle(&mut pwm, -1.0).expect("throttle");
-                        //     // todo;; keep an eye on this =============================================
-                        //     thread::sleep(Duration::from_secs(2));
-                        // } else {
-                        //     // dc_motor.set_throttle(&mut pwm, 1.0)?;
-                        //     // thread::sleep(Duration::from_secs(2));
-                        //     // dc_motor.set_throttle(&mut pwm, 0.0)?;
-                        //     // dc_motor.set_throttle(&mut pwm, -1.0)?;
-                        //     // thread::sleep(Duration::from_secs(2));
-                        //     // dc_motor.set_throttle(&mut pwm, 0.0)?;
-                        //     // dc_motor.set_throttle(&mut pwm, 0.5)?;
-                        //     // thread::sleep(Duration::from_millis(1750));
-                        //     // dc_motor.set_throttle(&mut pwm, 0.0)?;
-                        // }
                     },
                     PlanterLowered => {
                         println!("planter lowered");
