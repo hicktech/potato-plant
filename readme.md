@@ -1,19 +1,26 @@
 Potato Plant(er)
 ===
 
-Harriston n-row potato planter driver based on raspberry pi.
+Monitor and control Harriston n-row potato planter from a Raspberry Pi.
 
-![](doc/wireframe-1.png)
+![](doc/6row-planter.png)
 
-## Platform
-- Raspberry Pi
+https://www.harriston-mayo.com/harriston/equipment-type/potato-planting/
+
+## Hardware
+- Raspberry Pi 3
 - Official Pi screen
 - Adafruit DC motor hat
+- Taiss 100 step encoder
+- Baomain limit switches in hopper sensors
+- Baomain limit switch for lift sensor
+- 12v relays
+- 12v couplers
 
-
-## Stack
+## Software
+- Tokio
+- Rppal gpio
 - Iced GUI
-- rppal pi gpio
 
 
 ## Physical IO
@@ -36,7 +43,7 @@ Inputs and outputs can be classified as being planter wide (one per planter) or 
 - Seed belt control
 
 
-## Roadmap
+## Status
 
 1. - [X] Seed belt control
 2. - [X] Pick wheel flow control
@@ -47,8 +54,14 @@ Inputs and outputs can be classified as being planter wide (one per planter) or 
 7. - [ ] Seed sensor (eye)
 8. - [ ] Row context tracking based on planter raised sensor
 9. - [ ] J1939 speed sensor
-10. - [ ] Auto seed wheel speed control
+10. - [X] Auto seed wheel speed control
 11. - [ ] Seed placement metrics based on seed sensor
+
+Replaced the previous Dickey John monitor and planted 65k row feet with the cli app.
+
+GUI app in progress:
+
+![](doc/wireframe-1.png)
 
 
 ### Required for building
@@ -64,10 +77,3 @@ rustup target add armv7-unknown-linux-gnueabihf
 apt install gcc-arm-linux-gnueabihf
 cargo build --target=armv7-unknown-linux-gnueabihf
 ```
-
-## Notes
-- journal everything and resume seamlessly
-- 
-
-## References
-- 
