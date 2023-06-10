@@ -247,6 +247,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         dc_motor
             .set_throttle(&mut pwm, -1.0)
             .expect("init throttle -");
+        println!("== init flow to zero ==");
         thread::sleep(Duration::from_secs(2));
 
         tokio::task::spawn({
@@ -264,9 +265,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             dc_motor
                                 .set_throttle(&mut pwm, opts.throttle_rate)
                                 .expect("throttle +");
-                            time::interval(Duration::from_millis(opts.throttle_time))
-                                .tick()
-                                .await;
+                            time::sleep(Duration::from_millis(opts.throttle_time)).await;
                             dc_motor
                                 .set_throttle(&mut pwm, 0.0)
                                 .expect("throttle + 0.0");
@@ -278,9 +277,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             dc_motor
                                 .set_throttle(&mut pwm, opts.throttle_rate.neg())
                                 .expect("throttle -");
-                            time::interval(Duration::from_millis(opts.throttle_time))
-                                .tick()
-                                .await;
+                            time::sleep(Duration::from_millis(opts.throttle_time)).await;
                             dc_motor
                                 .set_throttle(&mut pwm, 0.0)
                                 .expect("throttle - 0.0");
